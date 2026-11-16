@@ -1,21 +1,181 @@
 [
   {
-    "task_type": "analyze",
-    "circuit": "mod1",
-    "prompt": "You are analyzing a first-order delta-sigma modulator in SPICE.\nThe circuit below is FULLY SPECIFIED - every parameter already has a\nfixed value. Predict its performance WITHOUT running a simulator, using\ncircuit analysis (gm/ID, pole-zero reasoning, etc).\n\nNetlist (all values fixed):\nVin inp 0 DC 1.2 SIN(1.2 0.0809 125000)   ; 125 kHz test tone\nVclk clk 0 PULSE(0 3.3 0 1n 1n 30n 100n) ; 10 MHz sampling clock\nM1 om inp tail 0 NMOS W=4.242e-05 L=2.021e-06      ; gm-C integrator: real diff pair\nM2 op  inn tail 0 NMOS W=4.242e-05 L=2.021e-06\nM5 tail nb 0 0 NMOS W=40u L=1u\nM6 nb   nb 0 0 NMOS W=40u L=1u\nIbs vdd nb 0.0001337\nM3 om om vdd vdd PMOS W=20u L=1u         ; mirror load\nM4 op om vdd vdd PMOS W=20u L=1u\nCint op 0 5.371e-11                           ; integrating capacitor\nBq qc 0 V = v(op) > 1.65 ? 1 : -1        ; 1-bit quantizer (ideal)\nSsh qc qh clk 0 SWSH                     ; sampled by a track/hold\nCsh qh 0 0.1p\nEfb inn 0 VALUE={1.2 + 0.6*v(qh)}     ; 1-bit feedback DAC (ideal)\n\nModels: LEVEL=1 MOSFETs.\n  NMOS: VTO=0.7  KP=110u GAMMA=0.40 LAMBDA=0.04\n  PMOS: VTO=-0.7 KP=50u  GAMMA=0.57 LAMBDA=0.05\nSupply 3.3 V, common mode 1.2 V, sampling clock 10 MHz, test tone 125 kHz.\nThe bitstream is decimated by a FIXED three-section RC filter (1k/1n per\nsection, corner near 159 kHz) that is part of the measurement, not of the\ndesign. Over a 16 us window the filtered output is projected onto the test tone:\nwhat lands on the tone is signal, everything else in the window is noise\nplus distortion.\n  sndr_db = 10*log10(signal power / noise+distortion power)\n  enob    = (sndr_db - 1.76) / 6.02\n  power_w = 3.3 V times the average supply current\n\nPredict these characteristics, in plain SI units (no dB where the\nunit says otherwise, no mW where the unit says W):\n  enob     - Effective bits, bits\n  sndr_db  - SNDR in band, dB\n  power_w  - Total power, W\n\nWork analytically. Do not run, invoke, or ask another tool to run any\ncircuit simulator (including SPICE, ngspice, or LTspice).\nKeep the explanation concise: aim for 2–4 short calculation steps. State the\nkey physical assumption, substitute the circuit values into the relevant equations,\nand give the essential intermediate numerical results with units. Group related\nmetrics in one step. Write each calculation inline as plain text on one line,\nwith the formula, substitution, result and unit together. Use * for multiplication,\n/ for division and ^ for powers. Avoid LaTeX, display math and stacked fractions.\nEnd with a JSON object containing\nthe same final numbers in the requested units using these keys:\n{\"enob\": <float>, \"sndr_db\": <float>, \"power_w\": <float>}\nAfter the final JSON (outside any code fence), put END on a line by itself as the terminal submission marker.",
-    "chatgpt_answer": "1. Bias current and transconductance. Assume both NMOS input devices operate in saturation, with approximately equal branch currents and a valid 1-bit feedback loop.\n\n   Itail = Ib = 0.0001337 A; Id = Itail/2 = 0.00006685 A.\n\n   W/L = 4.242e-5/2.021e-6 = 20.99; beta = 110e-6*20.99 = 0.002309 A/V^2.\n\n   Vov = (2*Id/beta)^0.5 = 0.2406 V; gm = 2*Id/Vov = 0.0005557 S.\n\n2. Integrator bandwidth and oversampling. Assume the 53.71 pF capacitor dominates the integrator dynamics.\n\n   gm/Cint = 0.0005557/5.371e-11 = 1.035e7 rad/s.\n\n   fu = gm/(2*pi*Cint) = 1.647e6 Hz; OSR = 10e6/(2*125e3) = 40.\n\n   The three-section RC measurement filter has substantial attenuation at 125 kHz, and its transient response affects the 16 us SNDR estimate.\n\n3. SNDR and ENOB estimate. For an ideal first-order modulator, use the approximate quantization-noise relationship, with an additional allowance for finite integrator gain, nonlinearities, and the short measurement window.\n\n   Delta = 1.2 V; Pq = (Delta^2/12)*(pi^2/(3*40^3)) = 6.169e-6 V^2.\n\n   Ps = 0.0809^2/2 = 0.003272 V^2; SNDR_ideal = 10*log10(Ps/Pq) = 27.25 dB.\n\n   Assuming approximately 5 dB degradation from nonideal behavior and measurement effects: sndr_db = 22.25 dB; enob = (22.25-1.76)/6.02 = 3.40 bits.\n\n4. Power consumption. Assume the input differential pair and bias mirror dominate supply current; the ideal comparator, switch, and feedback source are not counted as physical supply loads.\n\n   Isupply = Itail + Ib = 0.0002674 A; power_w = 3.3*0.0002674 = 0.00088242 W.\n\n   These are approximate analytical predictions, particularly SNDR and ENOB, because the switched feedback behavior and finite-window spectral leakage are not captured by the ideal first-order noise model.\n\n{\n  \"enob\": 3.40,\n  \"sndr_db\": 22.25,\n  \"power_w\": 0.00088242\n}",
-    "claude_answer": "Step 1. Supply current and power. The bias diode M6 (W/L = 40) mirrors into M5 (W/L = 40) with ratio 1, so Itail = Ibs = 133.7 uA. The tail current flows through M1/M2 and the M3/M4 mirror from vdd, so the supply current is Idd = 133.7 uA (reference branch) + 133.7 uA (tail) = 267.4 uA. The quantizer, clock and feedback DAC are ideal behavioral sources and draw no supply current. power_w = 3.3 V * 267.4 uA = 8.82e-4 W.\nStep 2. Integrator. Each branch carries ID = Itail/2 = 66.9 uA and W/L = 42.42u/2.021u = 20.99. gm = sqrt(2KP(W/L)ID) = sqrt(2110u20.9966.9u) = 5.56e-4 S. The output resistance is ro ≈ 1/((0.04+0.05)66.9u) = 166 kOhm, so the DC gain is gmro ≈ 92 (39 dB). The leak pole is 1/(2piroCint) = 1/(2pi166k53.71p) = 17.9 kHz, so the integrator is lossy. Per clock period, the gain per unit input difference is gmTs/Cint = 5.56e-4100n/53.71p = 1.035 V/V, close to the ideal first-order value of 1.\nStep 3. Modulator performance. The input amplitude is 0.0809 V against a feedback of ±0.6 V, about 0.135 of full scale, so the loop is not overloaded. The OSR is 10 MHz/(2125 kHz) = 40. The ideal first-order SQNR is 6.02 + 1.76 - 5.17 + 30log10(40) = 52.7 dB. Three things pull the result well below that: the finite integrator gain (92) and leak, which weaken the noise shaping; the fixed 3-section RC decimator with its 159 kHz corner, which barely attenuates the out-of-band quantization noise; and the short 16 us window (only 2 tone periods), which adds projection error and idle-tone effects. I estimate SNDR ≈ 32 dB, so enob = (32 - 1.76)/6.02 = 5.0 bits.\n{\"enob\": 5.0, \"sndr_db\": 32.0, \"power_w\": 0.000882} ",
-    "correct_answer": {
-      "steps": [
-        "Estimate: With balanced branches and ideal square-law saturation, gm1 ≈ sqrt(2 × 110e-6 × (4.2416344023819904e-05/2.0208116167170473e-06) × 0.0001337065322078094/2) = 0.0005556181 S.",
-        "Simulate env/circuits/mod1.sp (7070031dd6d9) with ngspice -b after substituting SI parameters {\"W1\": 4.2416344023819904e-05, \"L1\": 2.0208116167170473e-06, \"Ib\": 0.0001337065322078094, \"Ci\": 5.370584532102049e-11, \"Vref\": 0.6, \"Ain\": 0.0808966510119049}. Project the filtered output onto 125 kHz over 9.6–25.6 µs. Residual AC power gives noise plus distortion; supply power = 3.3 × mean(|I(Vdd)|).",
-        "From measured values (rounded): Fundamental amplitude ≈ 2 × sqrt(-0.0188563² + -0.00512207²). SNDR ≈ 10 log10((0.0390791²/2)/1.64858E-06) = 26.6575 dB. ENOB = (26.6575 - 1.76)/6.02 = 4.1358."
-      ],
-      "values": {
-        "enob": 4.135797342192691,
-        "sndr_db": 26.6575,
-        "power_w": 0.000869984
+    "task_id": "circuit_vco_041",
+    "overview": {
+      "circuit": "This oscillator produces a repeating signal. A control voltage sets its frequency.",
+      "goal": "Predict the performance of the circuit with the component values given.",
+      "metrics": {
+        "fosc_hz": "Oscillation frequency in hertz",
+        "kvco": "Change in frequency per volt of control voltage (Hz/V)",
+        "pushing": "Magnitude of the frequency change per volt of supply voltage (Hz/V)",
+        "power_w": "Power drawn from the supply in watts"
+      },
+      "how_to_read": "task contains the question and circuit description. oracle contains the ngspice reference. baseline_results contains the model answers. evaluation gives the rules used to score them.",
+      "accuracy_rule": "For each metric, divide the smaller of the prediction and the reference by the larger. A ratio of 0.9 or higher passes.",
+      "ChatGPT": "Difference from the simulator reference: fosc_hz 152.4%, kvco 89.5%, pushing 20.0%, power_w 25.7%.",
+      "Claude": "Difference from the simulator reference: fosc_hz 51.7%, kvco 134.0%, pushing 65.4%, power_w 11.1%."
+    },
+    "domain": "analog_circuit_design",
+    "circuit": "vco",
+    "task_type": "numerical_prediction",
+    "difficulty": "candidate_medium",
+    "task": {
+      "prompt": "You are analyzing a voltage-controlled ring oscillator in SPICE.\nThe circuit below is FULLY SPECIFIED - every parameter already has a\nfixed value. Predict its performance WITHOUT running a simulator, using\ncircuit analysis (gm/ID, pole-zero reasoning, etc).\n\nNetlist (all values fixed):\n.options gmin=1e-12 reltol=1e-4 abstol=1e-13 vntol=1e-7 itl1=500 noacct\n.model NMOS NMOS (LEVEL=1 VTO=0.7 KP=110u GAMMA=0.4 LAMBDA=0.04\n+ TOX=20n PHI=0.7 CGSO=0.4n CGDO=0.4n CJ=0.4m CJSW=0.8n MJ=0.5)\n.model PMOS PMOS (LEVEL=1 VTO=-0.7 KP=50u GAMMA=0.57 LAMBDA=0.05\n+ TOX=20n PHI=0.8 CGSO=0.4n CGDO=0.4n CJ=0.4m CJSW=0.8n MJ=0.5)\nVdd vdd 0 3.3\nVctrl ctrl cx 2.500000e+00\nVdelta cx 0 0\n.ic v(n1)=0 v(n2)=3.3 v(n3)=0\nMp1 n1 n3 vdd vdd PMOS W=6.180083e-05 L=1.203075e-06\nMn1 n1 n3 s1 0 NMOS W=3.476043e-05 L=1.203075e-06\nMs1 s1 ctrl 0 0 NMOS W=1.265910e-05 L=1.203075e-06\nC1 n1 0 1.437007e-13\nMp2 n2 n1 vdd vdd PMOS W=6.180083e-05 L=1.203075e-06\nMn2 n2 n1 s2 0 NMOS W=3.476043e-05 L=1.203075e-06\nMs2 s2 ctrl 0 0 NMOS W=1.265910e-05 L=1.203075e-06\nC2 n2 0 1.437007e-13\nMp3 n3 n2 vdd vdd PMOS W=6.180083e-05 L=1.203075e-06\nMn3 n3 n2 s3 0 NMOS W=3.476043e-05 L=1.203075e-06\nMs3 s3 ctrl 0 0 NMOS W=1.265910e-05 L=1.203075e-06\nC3 n3 0 1.437007e-13\n\nMeasurement definitions (in order):\nTransient sampling step and duration 0.5n 500n uic\nta (tran) = WHEN v(n1)=1.65 RISE=3\ntb (tran) = WHEN v(n1)=1.65 RISE=8\nf0 = 5/(tb-ta)\npwr = 3.3*mean(abs(i(Vdd)))\nFor subsequent measurements change Vdelta = 0.2\nTransient sampling step and duration 0.5n 500n uic\ntc (tran) = WHEN v(n1)=1.65 RISE=3\ntd (tran) = WHEN v(n1)=1.65 RISE=8\nf1 = 5/(td-tc)\nFor subsequent measurements change Vdelta = 0\nFor subsequent measurements change Vdd = 3.5\nTransient sampling step and duration 0.5n 500n uic\nte (tran) = WHEN v(n1)=1.65 RISE=3\ntf (tran) = WHEN v(n1)=1.65 RISE=8\nf2 = 5/(tf-te)\npower_w = pwr.\nfosc_hz = f0. kvco = (f1 - f0)/0.2. pushing = abs(f2 - f0)/0.2.\n\n\n\nPredict these characteristics, in plain SI units (no dB where the\nunit says otherwise, no mW where the unit says W):\n  fosc_hz  - Oscillation freq, Hz\n  kvco     - Tuning gain, Hz/V\n  pushing  - Supply pushing, Hz/V\n  power_w  - Total power, W\n\nWork analytically. Do not run, invoke, or ask another tool to run any\ncircuit simulator (including SPICE, ngspice, or LTspice).\nKeep the explanation concise: aim for 2–4 short calculation steps. State the\nkey physical assumption, substitute the circuit values into the relevant equations,\nand give the essential intermediate numerical results with units. Group related\nmetrics in one step. Write each calculation inline as plain text on one line,\nwith the formula, substitution, result and unit together. Use * for multiplication,\n/ for division and ^ for powers. Avoid LaTeX, display math and stacked fractions.\nEnd with a JSON object containing\nthe same final numbers in the requested units using these keys:\n{\"fosc_hz\": <float>, \"kvco\": <float>, \"pushing\": <float>, \"power_w\": <float>}\nAfter the final JSON (outside any code fence), put END on a line by itself as the terminal submission marker.",
+      "netlist": "* three-stage current-starved ring oscillator\n.options gmin=1e-12 reltol=1e-4 abstol=1e-13 vntol=1e-7 itl1=500 noacct\n\n.model NMOS NMOS (LEVEL=1 VTO=0.7 KP=110u GAMMA=0.4 LAMBDA=0.04\n+ TOX=20n PHI=0.7 CGSO=0.4n CGDO=0.4n CJ=0.4m CJSW=0.8n MJ=0.5)\n.model PMOS PMOS (LEVEL=1 VTO=-0.7 KP=50u GAMMA=0.57 LAMBDA=0.05\n+ TOX=20n PHI=0.8 CGSO=0.4n CGDO=0.4n CJ=0.4m CJSW=0.8n MJ=0.5)\n\nVdd vdd 0 3.3\n* the control voltage is split in two so the sweep step can be applied by\n* altering a source instead of evaluating arithmetic in the netlist\nVctrl ctrl cx 2.500000e+00\nVdelta cx 0 0\n\n* a ring has no stable dc solution to start from - the initial condition\n* kicks it and every run is done with uic\n.ic v(n1)=0 v(n2)=3.3 v(n3)=0\n\n* --- stage 1: inverter whose ground return is starved by Ms1 ---\nMp1 n1 n3 vdd vdd PMOS W=6.180083e-05 L=1.203075e-06\nMn1 n1 n3 s1 0 NMOS W=3.476043e-05 L=1.203075e-06\nMs1 s1 ctrl 0 0 NMOS W=1.265910e-05 L=1.203075e-06\nC1 n1 0 1.437007e-13\n* --- stage 2 ---\nMp2 n2 n1 vdd vdd PMOS W=6.180083e-05 L=1.203075e-06\nMn2 n2 n1 s2 0 NMOS W=3.476043e-05 L=1.203075e-06\nMs2 s2 ctrl 0 0 NMOS W=1.265910e-05 L=1.203075e-06\nC2 n2 0 1.437007e-13\n* --- stage 3 ---\nMp3 n3 n2 vdd vdd PMOS W=6.180083e-05 L=1.203075e-06\nMn3 n3 n2 s3 0 NMOS W=3.476043e-05 L=1.203075e-06\nMs3 s3 ctrl 0 0 NMOS W=1.265910e-05 L=1.203075e-06\nC3 n3 0 1.437007e-13\n\n.control\nset noaskquit\n\n* --- run 1: nominal control voltage and nominal supply ---\ntran 0.5n 500n uic\nmeas tran ta WHEN v(n1)=1.65 RISE=3\nmeas tran tb WHEN v(n1)=1.65 RISE=8\nlet f0 = 5/(tb-ta)\nlet pwr = 3.3*mean(abs(i(Vdd)))\n* each run opens a new plot, so every result is written out before the\n* next tran starts - scalars do not survive a plot change\necho \"$&f0 $&pwr\" > f0.txt\n\n* --- run 2: control voltage stepped by +200 mV -> tuning gain ---\nalter Vdelta = 0.2\ntran 0.5n 500n uic\nmeas tran tc WHEN v(n1)=1.65 RISE=3\nmeas tran td WHEN v(n1)=1.65 RISE=8\nlet f1 = 5/(td-tc)\necho \"$&f1\" > f1.txt\n\n* --- run 3: control restored, supply stepped by +200 mV -> pushing ---\nalter Vdelta = 0\nalter Vdd = 3.5\ntran 0.5n 500n uic\nmeas tran te WHEN v(n1)=1.65 RISE=3\nmeas tran tf WHEN v(n1)=1.65 RISE=8\nlet f2 = 5/(tf-te)\necho \"$&f2\" > f2.txt\nquit\n.endc\n.end\n",
+      "tools_allowed": false,
+      "source": {
+        "type": "analyze",
+        "circuit": "vco",
+        "params": {
+          "Wp": 6.180083024992617e-05,
+          "Wn": 3.476042641450456e-05,
+          "Ws": 1.2659104738727196e-05,
+          "L": 1.203075038293806e-06,
+          "Cl": 1.4370071096111147e-13,
+          "Vc": 2.5
+        },
+        "measured": {
+          "fosc_hz": 428430000.0,
+          "kvco": 170935000.0,
+          "pushing": 86665000.0,
+          "power_w": 0.00737745
+        }
+      },
+      "split": "test"
+    },
+    "oracle": {
+      "method": "ngspice_parameter_sweep",
+      "fosc_hz": 428430000.0,
+      "kvco": 170935000.0,
+      "pushing": 86665000.0,
+      "power_w": 0.00737745,
+      "verified": true,
+      "measurement_config": {
+        "simulation_duration_s": 5.000000000000001e-07,
+        "max_timestep_s": null,
+        "measurement_start_s": null,
+        "measurement_end_s": null,
+        "transient_runs": [
+          {
+            "print_step_s": 5e-10,
+            "simulation_duration_s": 5.000000000000001e-07,
+            "max_timestep_s": null
+          },
+          {
+            "print_step_s": 5e-10,
+            "simulation_duration_s": 5.000000000000001e-07,
+            "max_timestep_s": null
+          },
+          {
+            "print_step_s": 5e-10,
+            "simulation_duration_s": 5.000000000000001e-07,
+            "max_timestep_s": null
+          }
+        ],
+        "measurement_windows": [],
+        "simulator": "ngspice",
+        "version": "ngspice-47 : Circuit level simulation program",
+        "analysis": ["tran 0.5n 500n uic", "tran 0.5n 500n uic", "tran 0.5n 500n uic"],
+        "sources": ["Vdd vdd 0 3.3", "Vctrl ctrl cx 2.500000e+00", "Vdelta cx 0 0"],
+        "initial_conditions": [".ic v(n1)=0 v(n2)=3.3 v(n3)=0"],
+        "model_parameters": [
+          ".model NMOS NMOS (LEVEL=1 VTO=0.7 KP=110u GAMMA=0.4 LAMBDA=0.04\n+ TOX=20n PHI=0.7 CGSO=0.4n CGDO=0.4n CJ=0.4m CJSW=0.8n MJ=0.5)",
+          ".model PMOS PMOS (LEVEL=1 VTO=-0.7 KP=50u GAMMA=0.57 LAMBDA=0.05\n+ TOX=20n PHI=0.8 CGSO=0.4n CGDO=0.4n CJ=0.4m CJSW=0.8n MJ=0.5)"
+        ],
+        "options": [".options gmin=1e-12 reltol=1e-4 abstol=1e-13 vntol=1e-7 itl1=500 noacct"],
+        "measurement_method": [
+          "set noaskquit",
+          "tran 0.5n 500n uic",
+          "meas tran ta WHEN v(n1)=1.65 RISE=3",
+          "meas tran tb WHEN v(n1)=1.65 RISE=8",
+          "let f0 = 5/(tb-ta)",
+          "let pwr = 3.3*mean(abs(i(Vdd)))",
+          "echo \"$&f0 $&pwr\" > f0.txt",
+          "alter Vdelta = 0.2",
+          "tran 0.5n 500n uic",
+          "meas tran tc WHEN v(n1)=1.65 RISE=3",
+          "meas tran td WHEN v(n1)=1.65 RISE=8",
+          "let f1 = 5/(td-tc)",
+          "echo \"$&f1\" > f1.txt",
+          "alter Vdelta = 0",
+          "alter Vdd = 3.5",
+          "tran 0.5n 500n uic",
+          "meas tran te WHEN v(n1)=1.65 RISE=3",
+          "meas tran tf WHEN v(n1)=1.65 RISE=8",
+          "let f2 = 5/(tf-te)",
+          "echo \"$&f2\" > f2.txt",
+          "quit"
+        ],
+        "metric_equations": [
+          "meas tran ta WHEN v(n1)=1.65 RISE=3",
+          "meas tran tb WHEN v(n1)=1.65 RISE=8",
+          "let f0 = 5/(tb-ta)",
+          "let pwr = 3.3*mean(abs(i(Vdd)))",
+          "meas tran tc WHEN v(n1)=1.65 RISE=3",
+          "meas tran td WHEN v(n1)=1.65 RISE=8",
+          "let f1 = 5/(td-tc)",
+          "meas tran te WHEN v(n1)=1.65 RISE=3",
+          "meas tran tf WHEN v(n1)=1.65 RISE=8",
+          "let f2 = 5/(tf-te)"
+        ],
+        "scalar_measurements": [
+          "ta 4.86309E-09",
+          "tb 1.65336E-08",
+          "f0 4.2843E+08",
+          "pwr 0.00737745",
+          "tc 4.51152E-09",
+          "td 1.53196E-08",
+          "f1 4.62617E+08",
+          "te 4.65665E-09",
+          "tf 1.58734E-08",
+          "f2 4.45763E+08"
+        ],
+        "output_files": {"f0.txt": [428430000.0, 0.00737745], "f1.txt": [462617000.0], "f2.txt": [445763000.0]}
+      },
+      "units": {"fosc_hz": "Hz", "kvco": "Hz/V", "pushing": "Hz/V", "power_w": "W"},
+      "explanation_steps": [
+        "Estimate: A three-stage ring needs six stage delays per period. At load Cl = 1.4370071096111147e-13 F the nominal charge for a rail-to-rail transition is Cl × VDD = 1.4370071096111147e-13 × 3.3 = 4.742123e-13 C.",
+        "Simulate env/circuits/vco.sp (ac91325bffdd) with ngspice -b after substituting SI parameters {\"Wp\": 6.180083024992617e-05, \"Wn\": 3.476042641450456e-05, \"Ws\": 1.2659104738727196e-05, \"L\": 1.203075038293806e-06, \"Cl\": 1.4370071096111147e-13, \"Vc\": 2.5}. Count five periods at nominal bias, then repeat with control and supply each raised separately by 0.2 V. Power = 3.3 × mean(|I(Vdd)|) at nominal bias.",
+        "From measured values (rounded): Five periods span the third through eighth rising edges: f ≈ 5/(1.65336E-08 - 4.86309E-09) Hz. Control sensitivity = (4.62617E+08 - 4.2843E+08)/0.2 = 1.70935e+08 Hz/V; supply sensitivity = abs(4.45763E+08 - 4.2843E+08)/0.2 = 8.6665e+07 Hz/V."
+      ]
+    },
+    "baseline_results": {
+      "chatgpt_answer": "Key assumption: The three-stage ring is dominated by the explicit 143.7007 fF load per stage. The NMOS starving transistor limits the falling-edge current, while the PMOS provides a faster rising edge. Use LEVEL=1 square-law MOS equations and approximate propagation delays.\n\n1. Device parameters and discharge current\n\nNMOS starving-device ratio: W/L = 12.65910/1.203075 = 10.5223.\n\nStarving-device transconductance parameter: beta_s = 110e-6 * 10.5223 = 0.00115745 A/V^2.\n\nNominal overdrive: Vov = 2.5 - 0.7 = 1.8 V.\n\nThe ideal saturation-current ceiling is Isat = 0.5 * 0.00115745 * 1.8^2 = 0.001875 A.\n\nAccounting approximately for the series NMOS, source degeneration, and finite output voltage, use an effective falling-edge current of 0.00125 A.\n\n2. Oscillation frequency\n\nApproximate rising-edge current from the PMOS strength and output swing as 0.0020 A.\n\nFalling delay: tfall = 143.7007e-15 * 1.65 / 0.00125 = 1.897e-10 s.\n\nRising delay: trise = 143.7007e-15 * 1.65 / 0.0020 = 1.186e-10 s.\n\nOscillation period: T = 3 * (1.897e-10 + 1.186e-10) = 9.249e-10 s.\n\nOscillation frequency: fosc_hz = 1 / 9.249e-10 = 1.0812e9 Hz.\n\n3. Tuning gain and supply pushing\n\nAt Vctrl = 2.7 V, the ideal starving-device saturation-current ceiling increases by (2.7 - 0.7)^2 / (2.5 - 0.7)^2 = 1.23457.\n\nAllowing for series-device limitations, estimate an effective discharge-current increase of approximately 14%, giving f1 ≈ 1.146e9 Hz.\n\nTuning gain: kvco = (1.146e9 - 1.0812e9) / 0.2 = 3.24e8 Hz/V.\n\nFor Vdd = 3.5 V, assume increased switching swing partially offsets the stronger PMOS drive, giving f2 ≈ 1.102e9 Hz.\n\nSupply pushing: pushing = abs(1.102e9 - 1.0812e9) / 0.2 = 1.04e8 Hz/V.\n\n4. Total supply power\n\nAssume approximately one full 143.7007 fF capacitive charging event per stage per oscillation period, plus a small short-circuit contribution.\n\nCapacitive power: Pcap = 3 * 143.7007e-15 * 3.3^2 * 1.0812e9 = 0.005073 W.\n\nIncluding approximately 8% additional switching current: power_w = 0.005073 * 1.08 = 0.005479 W.\n\nThese are analytical estimates, not simulator-verified values. In particular, the effective switching currents and supply-pushing estimate are approximate.\n\nFinal predictions\nfosc_hz\t1.0812e9 Hz\nkvco\t3.24e8 Hz/V\npushing\t1.04e8 Hz/V\npower_w\t0.005479 W\n\n\n\n{\"fosc_hz\": 1081200000.0, \"kvco\": 324000000.0, \"pushing\": 104000000.0, \"power_w\": 0.005479}",
+      "chatgpt_fosc_hz": 1081200000.0,
+      "chatgpt_pushing": 104000000.0,
+      "chatgpt_kvco": 324000000.0,
+      "chatgpt_power_w": 0.005479,
+      "chatgpt_evaluation": {
+        "status": "incorrect",
+        "errors": {
+          "fosc_hz": {"absolute": 652770000.0, "relative": 1.5236327988236118},
+          "kvco": {"absolute": 153065000.0, "relative": 0.8954573375844619},
+          "pushing": {"absolute": 17335000.0, "relative": 0.20002307736687244},
+          "power_w": {"absolute": 0.0018984499999999994, "relative": 0.25733146276830066}
+        },
+        "issues": []
+      },
+      "claude_answer": "**Assumption:** this is a 3-stage current-starved ring oscillator. The starved NMOS sets the discharge current, and the PMOS pull-up is much stronger. The estimate is a hand calculation with no simulator run.\n\n1. **Discharge current.**\n   - Starve device: W/L = 12.66u/1.203u = 10.5, beta_s = 110u*10.5 = 1.16 mA/V^2, Vov = 2.5 - 0.7 = 1.8 V.\n   - Series Mn: W/L = 28.9, beta_n = 3.18 mA/V^2, with body effect Vt ≈ 0.93 V.\n   - Balancing the triode starve device against Mn gives Vds,s ≈ 1.3 V and I_disch ≈ 1.16m*(1.8*1.33 - 1.33^2/2) ≈ 1.7 mA.\n   - The PMOS has beta_p = 2.57 mA/V^2 and Vov = 2.6 V, so it can supply about 5-8 mA when it conducts.\n\n2. **Load and frequency.**\n   - C_load ≈ 144 fF (explicit) + 134 fF (next-stage gate, 2/3*Cox*W*L) + about 100 fF (overlap with Miller effect, junctions) ≈ 0.38 pF.\n   - Fall delay ≈ C*1.65/I ≈ 0.38p*1.65/1.75m ≈ 0.36 ns.\n   - Rise delay ≈ 0.38p*1.65/5m ≈ 0.13 ns.\n   - fosc ≈ 1/(3*(0.36n + 0.13n)) ≈ 1/1.47n ≈ 6.8e8 Hz, which I round down to 6.5e8 Hz for finite input slew.\n\n3. **Tuning gain and supply pushing.**\n   - A +0.2 V step raises Vov to 2.0 V, so the starve current rises about 15-18%.\n   - That raises f by about 12%, from 650 to 730 MHz, so kvco ≈ 80 MHz/0.2 V ≈ 4.0e8 Hz/V.\n   - Raising Vdd to 3.5 V increases the Mn1 gate drive and current by about 4%, but the swing and trip-point delay grow by about 6%. These nearly cancel, leaving a shift of about +6 MHz, so pushing ≈ 3e7 Hz/V.\n\n4. **Power.**\n   - Charge per cycle is about C*Vdd per stage, so I_avg ≈ 3*0.35p*3.3*6.5e8 ≈ 2.25 mA, plus about 10% crowbar current ≈ 2.5 mA.\n   - P ≈ 3.3 V * 2.5 mA ≈ 8.2e-3 W.\n\n{\"fosc_hz\": 6.5e8, \"kvco\": 4.0e8, \"pushing\": 3.0e7, \"power_w\": 8.2e-3}",
+      "claude_fosc_hz": 650000000.0,
+      "claude_pushing": 30000000.0,
+      "claude_kvco": 400000000.0,
+      "claude_power_w": 0.0082,
+      "claude_evaluation": {
+        "status": "incorrect",
+        "errors": {
+          "fosc_hz": {"absolute": 221570000.0, "relative": 0.5171673318861891},
+          "kvco": {"absolute": 229065000.0, "relative": 1.3400707871413111},
+          "pushing": {"absolute": 56665000.0, "relative": 0.6538394969134022},
+          "power_w": {"absolute": 0.0008225500000000009, "relative": 0.11149516431829438}
+        },
+        "issues": []
       }
+    },
+    "evaluation": {
+      "primary_metrics": ["fosc_hz", "kvco", "pushing", "power_w"],
+      "derived_metrics": [],
+      "reward_type": "tolerance_based",
+      "tolerances": {"symmetric_ratio_min": 0.9}
     }
   }
 ]
