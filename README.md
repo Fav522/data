@@ -55,12 +55,13 @@ Each record contains a task description, circuit parameters or design constraint
 
 Neither baseline fully solved any of the nine VCO prediction tasks. These results suggest the benchmark is challenging for the evaluated models, but 28 tasks are insufficient for broad statistical claims about model rankings.
 
-## Commercial Positioning
+## Task Descriptions
 
-The dataset is suitable as a **focused evaluation benchmark** for AI labs, model developers, and researchers investigating analog circuit reasoning. Its main value is the combination of simulator-verified numerical answers, transparent circuit specifications, and baseline performance evidence.
+The benchmark presents realistic SPICE netlists and asks models to apply transistor-level circuit analysis rather than run a simulator. Tasks specify component values, MOSFET models, operating conditions, measurement procedures, and required output units.
 
-**Current limitations:** The dataset contains only 28 tasks across three circuit families, all labeled `candidate_medium`. Broader circuit coverage, additional difficulty levels, independent reference audits, and more model baselines would strengthen a larger commercial release.
+- **Ring oscillator prediction (9 tasks):** Estimate oscillation frequency, control-voltage tuning gain (KVCO), supply-voltage pushing, and power consumption for three-stage current-starved oscillators.
+- **Delta-sigma modulator prediction (7 tasks):** Predict the behavior of fixed first-order modulators, including signal quality and power consumption, from their circuit parameters and sampling conditions.
+- **Delta-sigma modulator optimization (7 tasks):** Select allowed transistor and circuit parameters within a fixed topology to satisfy performance constraints, including SNDR and power requirements.
+- **Source-follower buffer prediction (5 tasks):** Estimate quiescent current, output swing, and total harmonic distortion for NMOS voltage buffers driven by a sinusoidal input.
 
-## Overall Assessment
-
-**A technically grounded, compact benchmark for quantitative analog circuit reasoning.** Its verified references and challenging baseline results make it useful as a pilot benchmark or specialized evaluation set. It should not yet be presented as a comprehensive measure of analog electronics expertise.
+Each task is paired with a simulator-derived reference and recorded model predictions, enabling quantitative comparison and detailed error analysis.
