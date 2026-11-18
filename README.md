@@ -63,7 +63,7 @@ A task is counted as **fully correct** only when the model meets the evaluation 
 
 **Partially correct tasks are not counted as successful solutions** in the full-task success rate. The exact checks may differ between numerical prediction and parameter-optimization tasks.
 
-Neither baseline fully solved any of the nine VCO prediction tasks. These results suggest the benchmark is challenging for the evaluated models, but 28 tasks are insufficient for broad statistical claims about model rankings.
+Neither baseline fully solved any of the nine VCO prediction tasks. These results suggest the benchmark is challenging for the evaluated models.
 
 ## Task Descriptions
 
